@@ -1,0 +1,11 @@
+{
+  "name": "computational-thinking-4",
+  "private": true,
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w frontend",
+    "build": "npm run build -w frontend"
+  }
+}
