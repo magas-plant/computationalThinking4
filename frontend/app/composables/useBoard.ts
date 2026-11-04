@@ -1,5 +1,8 @@
 import type { BoardObject, ObjectTemplate, Rect, StyleChanges, TextObject } from '~/types/canvas-object'
 
+const OBJECTS_URL = 'http://localhost:3001/objects'
+const SAVE_DELAY = 300
+
 const TEXT_DEFAULTS = { text: '', fontSize: FONT_SIZES.M, bold: false }
 
 // Starting attributes of a new object, per variant. Only variants with text get text attributes.
@@ -9,38 +12,67 @@ const DEFAULTS: Record<BoardObject['type'], Rect & Partial<TextObject>> = {
   'circle': { x: 0, y: 0, width: GRID_SIZE * 6, height: GRID_SIZE * 6 },
 }
 
+type ObjectChanges = Partial<Rect> & StyleChanges & { text?: string }
+
+// Module level on purpose: useBoard() runs once per caller (app.vue, useObjectGesture,
+// useShortcuts), and all of them must share one load and one set of pending saves.
+const pendingSaves = new Map<string, { changes: ObjectChanges, timer: ReturnType<typeof setTimeout> }>()
+let loadStarted = false
+
+// Collects changes per object and sends them as one PATCH once they pause.
+function saveLater(id: string, changes: ObjectChanges) {
+  const pending = pendingSaves.get(id)
+  clearTimeout(pending?.timer)
+  const merged = { ...pending?.changes, ...changes }
+  const timer = setTimeout(() => {
+    pendingSaves.delete(id)
+    $fetch(`${OBJECTS_URL}/${id}`, { method: 'PATCH', body: merged })
+  }, SAVE_DELAY)
+  pendingSaves.set(id, { changes: merged, timer })
+}
+
 // The board state is the single source of truth for which objects exist and what they look like.
-// Components only read it; every change goes through one of the functions below.
+// Components only read it; every change goes through one of the functions below,
+// which update the local state first and then tell the backend.
 export function useBoard() {
-  const objects = useState<BoardObject[]>('objects', () => [
-    { id: 'note-1', type: 'sticky-note', x: 120, y: 120, width: 192, height: 192, text: 'Hello, board!', color: 'yellow', fontSize: FONT_SIZES.M, bold: false },
-    { id: 'note-2', type: 'sticky-note', x: 360, y: 120, width: 192, height: 192, text: 'Drag me around', color: 'pink', fontSize: FONT_SIZES.M, bold: false },
-    { id: 'text-1', type: 'text', x: 600, y: 120, width: 240, height: 72, text: 'Just some text', fontSize: FONT_SIZES.M, bold: false },
-    { id: 'circle-1', type: 'circle', x: 600, y: 240, width: 144, height: 144, color: 'blue' },
-  ])
+  const objects = useState<BoardObject[]>('objects', () => [])
+
+  onMounted(async () => {
+    if (loadStarted) return
+    loadStarted = true
+    objects.value = await $fetch<BoardObject[]>(OBJECTS_URL)
+  })
 
   function addObject(template: ObjectTemplate, centerX: number, centerY: number) {
     const defaults = DEFAULTS[template.type]
     const id = crypto.randomUUID()
     const x = snapToGrid(centerX - defaults.width / 2)
     const y = snapToGrid(centerY - defaults.height / 2)
-    objects.value = [...objects.value, { ...defaults, ...template, id, x, y } as BoardObject]
+    const object = { ...defaults, ...template, id, x, y } as BoardObject
+    objects.value = [...objects.value, object]
+    $fetch(OBJECTS_URL, { method: 'POST', body: object })
     return id
   }
 
   // Works for every variant: the copy keeps all attributes except the id.
   function addCopy(source: BoardObject) {
     const id = crypto.randomUUID()
-    objects.value = [...objects.value, { ...source, id }]
+    const object = { ...source, id }
+    objects.value = [...objects.value, object]
+    $fetch(OBJECTS_URL, { method: 'POST', body: object })
     return id
   }
 
   function removeObject(id: string) {
     objects.value = objects.value.filter(object => object.id !== id)
+    clearTimeout(pendingSaves.get(id)?.timer)
+    pendingSaves.delete(id)
+    $fetch(`${OBJECTS_URL}/${id}`, { method: 'DELETE' })
   }
 
-  function updateObject(id: string, changes: Partial<Rect> & StyleChanges & { text?: string }) {
+  function updateObject(id: string, changes: ObjectChanges) {
     objects.value = objects.value.map(object => (object.id === id ? ({ ...object, ...changes } as BoardObject) : object))
+    saveLater(id, changes)
   }
 
   function moveObject(id: string, x: number, y: number) {

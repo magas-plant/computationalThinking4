@@ -12,7 +12,7 @@
     "@lucide/vue": "^1.53.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "nuxt": "^4.6.0",
+    "nuxt": "^4.6.4",
     "reka-ui": "^2.11.0",
     "shadcn-vue": "^2.8.2",
     "tailwind-merge": "^3.7.0",

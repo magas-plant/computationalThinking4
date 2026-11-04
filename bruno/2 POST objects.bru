@@ -1,0 +1,26 @@
+meta {
+  name: 2 POST objects
+  type: http
+  seq: 2
+}
+
+post {
+  url: http://localhost:3001/objects
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "id": "bruno-note",
+    "type": "sticky-note",
+    "x": 120,
+    "y": 120,
+    "width": 192,
+    "height": 192,
+    "text": "Hello from Bruno",
+    "color": "yellow",
+    "fontSize": 16,
+    "bold": false
+  }
+}

@@ -2,10 +2,12 @@
   "name": "computational-thinking-4",
   "private": true,
   "workspaces": [
-    "frontend"
+    "frontend",
+    "backend"
   ],
   "scripts": {
     "dev": "npm run dev -w frontend",
+    "dev:backend": "npm run dev -w backend",
     "build": "npm run build -w frontend",
     "sync": "node scripts/sync.mjs"
   }
